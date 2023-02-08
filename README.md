@@ -35,3 +35,27 @@ understand further. A demo run is as follows:
 ```
 
 This evaluates the trained model on samples generated from $3$ runs, using only the negative log likelihood (`--eval_nll`). It also generates neat visualization of the diffusion process as `gif` animations.
+
+<details>
+ <summary>Example plot generated with <code>--vis_overlay</code>. </summary>
+
+![image](https://user-images.githubusercontent.com/22210756/217594151-79a30d7c-f733-45e6-9b48-55e7d2479249.png)
+
+
+Here, yellow-magenta points represent the original distribution and the blue-purple points indicate samples generated from a trained DDPM
+
+</details>
+
+<details>
+ <summary>Example animation produced with <code>--vis_diffusion</code>. </summary>
+
+![00 diffusionvis track_max=False track_min=False smoothed_end=True](https://user-images.githubusercontent.com/22210756/217595408-07e149f0-a145-4fec-8900-c5eed0f6a4c3.gif)
+
+
+Here, yellow-magenta points represent the original distribution and the blue-purple points indicate samples generated from a trained DDPM. Notice how the blue-purple points slowly become closer and closer to the original distribution as the reverse process progresses.
+
+</details>
+
+# Acknowledgements
+
+Special thanks to [Kanad Pardeshi](https://github.com/KanPard005) for generating the `3d_sin_5_5` distribution and helping with the implementation of several evaluation metrics
