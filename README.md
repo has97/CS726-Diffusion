@@ -5,16 +5,17 @@
 
 Steps to get started with the code:
 
-1. Install Anaconda on your system, download from -- `https://www.anaconda.com`.
+1. Install Anaconda on your system, download from -- [`https://www.anaconda.com`](https://www.anaconda.com).
 3. Clone the github repo -- `git clone https://github.com/ashutoshbsathe/explore-diffusion.git`, into some convenient folder of your choice.
 4. `cd explore-diffusion`.
 5. Run the command -- `conda env create --file environment.yaml`. This will setup all the required dependencies.
-6. Activate the environment using `source activate cs726-env`. You are done with the setup.
+6. Activate the environment using `source activate cs726-env` or `conda activate cs726-env`. You are done with the setup.
 
 # Training your model
 
-Once you code up your model in the `model.py` file, you can use the provided trainer in the `train.py` file to train your model, as -- `python train.py`. 
-You can use various command line arguments to tweak the number of epochs, batch size, etc. Please check the `train.py` file for details.
+Once you code up your model in the [`model.py`](model.py) file, you can use the provided trainer in the [`train.py`](train.py) file to train your model, as -- `python train.py`. 
+
+You can use various command line arguments to tweak the number of epochs, batch size, etc. Please check the `train.py` file for details. You can get the full list of available hyperparameters by doing `python train.py -h` 
 
 After completion of training you can find the checkpoint and hyperparams under the `runs` directory. A demo directory structure is shown as follows:
 
@@ -29,8 +30,8 @@ understand further. A demo run is as follows:
 
 ```
  python eval.py --ckpt_path runs/n_dim=3,n_steps=50,lbeta=1.000e-05,ubeta=1.280e-02,batch_size=1024,n_epochs=500/last.ckpt \
- --hparams_path runs/n_dim=3,n_steps=50,lbeta=1.000e-05,ubeta=1.280e-02,batch_size=1024,n_epochs=500/lightning_logs/version_0/hparams.yaml \
- --eval_nll --vis_diffusion --vis_overlay
+                --hparams_path runs/n_dim=3,n_steps=50,lbeta=1.000e-05,ubeta=1.280e-02,batch_size=1024,n_epochs=500/lightning_logs/version_0/hparams.yaml \
+                --eval_nll --vis_diffusion --vis_overlay
 ```
 
 This evaluates the trained model on samples generated from $3$ runs, using only the negative log likelihood (`--eval_nll`). It also generates neat visualization of the diffusion process as `gif` animations.
