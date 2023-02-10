@@ -58,4 +58,4 @@ Here, yellow-magenta points represent the original distribution and the blue-pur
 
 # Acknowledgements
 
-Special thanks to [Kanad Pardeshi](https://github.com/KanPard005) for generating the `3d_sin_5_5` distribution and helping with the implementation of several evaluation metrics
+Special thanks to [Kanad Pardeshi](https://github.com/KanPard005) for generating the `3d_sin_5_5` and `helix` distributions and helping with the implementation of several evaluation metrics
