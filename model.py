@@ -14,12 +14,16 @@ class LitDiffusionModel(pl.LightningModule):
         Your model implementation starts here. We have separate learnable modules for `time_embed` and `model`.
         You may choose a different architecture altogether. Feel free to explore what works best for you.
         If your architecture is just a sequence of `torch.nn.XXX` layers, using `torch.nn.Sequential` will be easier.
+        
+        `time_embed` can be learned or a fixed function based on the insights you get from visualizing the data.
+        If your `model` is different for different datasets, you can use a hyperparameter to switch between them.
+        Make sure that your hyperparameter behaves as expecte and is being saved correctly in `hparams.yaml`.
         """
         self.time_embed = None
         self.model = None
 
         """
-        Be sure to save at least these 2 parameters in the model instance
+        Be sure to save at least these 2 parameters in the model instance.
         """
         self.n_steps = n_steps
         self.n_dim = n_dim
@@ -33,7 +37,7 @@ class LitDiffusionModel(pl.LightningModule):
         """
         Similar to `forward` function in `nn.Module`. 
         Notice here that `x` and `t` are passed separately. If you are using an architecture that combines
-        `x` and `t` in a different way, modify this function appropriately
+        `x` and `t` in a different way, modify this function appropriately.
         """
         if not isinstance(t, torch.Tensor):
             t = torch.LongTensor([t]).expand(x.size(0))
@@ -85,10 +89,12 @@ class LitDiffusionModel(pl.LightningModule):
         reverse process.
         If `return_intermediate` is `False`,
             the function returns a `n_samples` sampled from the learned DDPM
-            i.e. a Tensor of size (n_samples, n_dim)
+            i.e. a Tensor of size (n_samples, n_dim).
+            Return: (n_samples, n_dim)(final result from diffusion)
         Else
             the function returns all the intermediate steps in the diffusion process as well 
-            i.e. a list of `self.n_steps` Tensors of size (n_samples, n_dim) each
+            i.e. a Tensor of size (n_samples, n_dim) and a list of `self.n_steps` Tensors of size (n_samples, n_dim) each.
+            Return: (n_samples, n_dim)(final result), [(n_samples, n_dim)(intermediate) x n_steps]
         """
         pass
 
