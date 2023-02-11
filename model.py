@@ -19,16 +19,16 @@ class LitDiffusionModel(pl.LightningModule):
         If your `model` is different for different datasets, you can use a hyperparameter to switch between them.
         Make sure that your hyperparameter behaves as expecte and is being saved correctly in `hparams.yaml`.
         """
-        t = torch.zeros(200,4)
+        t = torch.zeros(200,4,dtype=torch.float)
         for i in range(200):
             for j in range(2):
                 t[i][2*j]= torch.sin(i/(torch.pow(10000,torch.tensor(2*j/4))))
                 t[i][2*j+1]= torch.cos(i/(torch.pow(10000,torch.tensor(2*j/4))))
         self.time_embed = t
         self.model = torch.nn.Sequential(
-          nn.Linear(7,10),
-          nn.ReLU(),
-          nn.Linear(10,3)
+          torch.nn.Linear(7,10),
+          torch.nn.ReLU(),
+          torch.nn.Linear(10,3)
         )
 
         """
@@ -42,8 +42,8 @@ class LitDiffusionModel(pl.LightningModule):
         """
         self.betas = self.init_alpha_beta_schedule(lbeta, ubeta)
         self.alphas = 1 - self.betas
-        self.alpha_bar = torch.cumprod(self.alphas)
-        self.alpha_bar_minus = torch.cat((torch.tensor([1]),self.alpha_bar[:-1]))
+        self.alpha_bar = torch.cumprod(self.alphas,axis=0)
+        self.alpha_bar_minus = torch.cat((torch.tensor([1]),self.alpha_bar[:-1]),axis=0)
         self.sqrt_alpha_bar = torch.sqrt(self.alpha_bar)
         self.sqrt_alpha_bar_minus = torch.sqrt(self.alpha_bar_minus)
         self.sigma = torch.sqrt(((1-self.alpha_bar_minus)/(1-self.alpha_bar))*self.betas)
@@ -67,15 +67,18 @@ class LitDiffusionModel(pl.LightningModule):
         """
         return torch.linspace(lbeta,ubeta,self.n_steps)
     def index(self,t,i,x): # helper function to get the tensors corresponding to given dimension
-        
-        x1 = torch.gather(t,0,i)
-        return x1.reshape(len(x.shape[0]),[1]*(len(x.shape)-1))
+        # t1= t.reshape(-1,1)
+        # print("t ",t.shape," i ",i.shape)
+        # x1 = torch.gather(t.cpu(),0,i.cpu()).to('cuda')
+        x1   = t.gather(-1,i.cpu()).to('cuda')
+        return x1.reshape([x.shape[0]]+[1]*(len(x.shape)-1))
 
     def q_sample(self, x, t):
         """
         Sample from q given x_t.
+        t -> (1024,1)
         """
-        i = torch.randn_like(x)
+        i = torch.randn_like(x).type(torch.float)
         return self.index(self.sqrt_alpha_bar,t,x)*x + self.index(1-self.alpha_bar,t,x)*i,i
         
 
@@ -84,8 +87,17 @@ class LitDiffusionModel(pl.LightningModule):
         Sample from p given x_t.
         
         """
-        z = torch.randn_like(x)
-        s =  1/(self.index(self.alpha,t,x))*(x - (self.index(self.betas,t,x)/(torch.sqrt(1-self.index(self.alpha_bar,t,x))))*model(x,t))
+        z = torch.randn_like(x).type(torch.float)
+        t1=self.time_embed[t.cpu()]
+        # print("x ",x.is_cuda)
+        # print("t ",t.is_cuda)
+        # print("t1 ",t1.is_cuda)
+        # print("z ",z.is_cuda)
+        x = x.to("cuda")
+        t1 = t1.to("cuda")
+        z = z.to("cuda")
+        # print("index ",(self.index(self.alphas,t,x)).is_cuda)
+        s =  1/(self.index(self.alphas,t,x))*(x - (self.index(self.betas,t,x)/(torch.sqrt(1-self.index(self.alpha_bar,t,x))))*self.model(torch.cat((x,t1),axis=1).to("cuda")))
         s += self.index(self.sigma,t,x)*z
         
         return s
@@ -108,10 +120,13 @@ class LitDiffusionModel(pl.LightningModule):
         [2]: https://pytorch-lightning.readthedocs.io/en/stable/
         [3]: https://www.pytorchlightning.ai/tutorials
         """
-        t = torch.randint(0, self.n_steps, (len(batch_idx),))
-        batch_noise,noise = self.q_sample(batch[batch_idx],t)
-        e_theta = model(torch.cat(batch_noise,t))
-        loss = nn.MSELoss()
+        # print(batch.shape)
+        t = torch.randint(0, self.n_steps, (batch.shape[0],),device='cuda')
+        batch_noise,noise = self.q_sample(batch,t)
+        t1=self.time_embed[t.cpu()].to('cuda')
+        # print(t1.shape)
+        e_theta = self.model(torch.cat((batch_noise,t1),axis=1).type(torch.float).to('cuda'))
+        loss = torch.nn.MSELoss()
         return loss(e_theta,noise)
         
         
@@ -131,20 +146,25 @@ class LitDiffusionModel(pl.LightningModule):
             Return: (n_samples, n_dim)(final result), [(n_samples, n_dim)(intermediate) x n_steps]
         """
         points = []
+        self.model = self.model.to('cuda')
         if return_intermediate is False:
             x = torch.randn((n_samples,self.n_dim))
             for i in range(self.n_steps-1,-1,-1):
-                x_t = self.p_sample(x,i)
+                t = torch.full((n_samples,), i, device='cuda', dtype=torch.long)
+                x_t = self.p_sample(x,t)
                 x=x_t
             return x
         else:
             x = torch.randn((n_samples,self.n_dim))
-            points.append(x)
+            points.append(x.detach().cpu().numpy())
             for i in range(self.n_steps-1,-1,-1):
-                x_t = self.p_sample(x,i)
+                t = torch.full((n_samples,), i, device='cuda', dtype=torch.long)
+                x_t = self.p_sample(x,t)
                 x=x_t
-                points.append(x)
-            return torch.tensor(points).permute(1,2,0)
+                points.append(x.detach().cpu().numpy())
+            # print(torch.tensor(points).shape)
+            point = torch.tensor(points).permute(1,2,0)
+            return x.detach().cpu(),point
             
 
     def configure_optimizers(self):
@@ -154,5 +174,5 @@ class LitDiffusionModel(pl.LightningModule):
         You may choose to add certain hyperparameters of the optimizers to the `train.py` as well.
         In our experiments, we chose one good value of optimizer hyperparameters for all experiments.
         """
-        optimizer = torch.optim.Adam(lr=0.0001)
+        optimizer = torch.optim.Adam(self.model.parameters(),lr=0.0001)
         return optimizer

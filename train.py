@@ -49,6 +49,8 @@ trainer = pl.Trainer(
     logger=pl.loggers.TensorBoardLogger(f'{savedir}/{run_name}/'),
     max_epochs=n_epochs,
     log_every_n_steps=1,
+    accelerator="gpu",
+    devices=1,
     callbacks=[
         # A dummy model checkpoint callback that stores the latest model at the end of every epoch
         pl.callbacks.ModelCheckpoint(
@@ -64,3 +66,7 @@ trainer = pl.Trainer(
 )
 
 trainer.fit(model=litmodel, train_dataloaders=train_dataloader)
+
+ 
+    # python eval.py 
+    # --ckpt_path runs/n_dim=3,n_steps=50,lbeta=1.000e05,ubeta=1.280e02,batch_size=1024,n_epochs=500/last.ckpt --hparams_path runs/n_dim=3,n_steps=50,lbeta=1.000e-05,ubeta=1.280e-02,batch_size=1024,n_epochs=500/lightning_logs/version_0/hparams.yaml --eval_nll --vis_diffusion --vis_overlay
