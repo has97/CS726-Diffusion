@@ -26,7 +26,7 @@ class LitDiffusionModel(pl.LightningModule):
                 t[i][2*j+1]= torch.cos(i/(torch.pow(10000,torch.tensor(2*j/4))))
         self.time_embed = t
         self.model = torch.nn.Sequential(
-          nn.Linear(3,10),
+          nn.Linear(7,10),
           nn.ReLU(),
           nn.Linear(10,3)
         )
@@ -40,7 +40,13 @@ class LitDiffusionModel(pl.LightningModule):
         """
         Sets up variables for noise schedule
         """
-        self.init_alpha_beta_schedule(lbeta, ubeta)
+        self.betas = self.init_alpha_beta_schedule(lbeta, ubeta)
+        self.alphas = 1 - self.betas
+        self.alpha_bar = torch.cumprod(self.alphas)
+        self.alpha_bar_minus = torch.cat((torch.tensor([1]),self.alpha_bar[:-1]))
+        self.sqrt_alpha_bar = torch.sqrt(self.alpha_bar)
+        self.sqrt_alpha_bar_minus = torch.sqrt(self.alpha_bar_minus)
+        self.sigma = torch.sqrt(((1-self.alpha_bar_minus)/(1-self.alpha_bar))*self.betas)
 
     def forward(self, x, t):
         """
@@ -59,19 +65,32 @@ class LitDiffusionModel(pl.LightningModule):
         switch between various schedules for answering q4 in depth. Make sure that this hyperparameter 
         is included correctly while saving and loading your checkpoints.
         """
-        pass
+        return torch.linspace(lbeta,ubeta,self.n_steps)
+    def index(self,t,i,x): # helper function to get the tensors corresponding to given dimension
+        
+        x1 = torch.gather(t,0,i)
+        return x1.reshape(len(x.shape[0]),[1]*(len(x.shape)-1))
 
     def q_sample(self, x, t):
         """
         Sample from q given x_t.
         """
-        pass
+        i = torch.randn_like(x)
+        return self.index(self.sqrt_alpha_bar,t,x)*x + self.index(1-self.alpha_bar,t,x)*i,i
+        
 
     def p_sample(self, x, t):
         """
         Sample from p given x_t.
+        
         """
-        pass
+        z = torch.randn_like(x)
+        s =  1/(self.index(self.alpha,t,x))*(x - (self.index(self.betas,t,x)/(torch.sqrt(1-self.index(self.alpha_bar,t,x))))*model(x,t))
+        s += self.index(self.sigma,t,x)*z
+        
+        return s
+        
+        
 
     def training_step(self, batch, batch_idx):
         """
@@ -89,7 +108,13 @@ class LitDiffusionModel(pl.LightningModule):
         [2]: https://pytorch-lightning.readthedocs.io/en/stable/
         [3]: https://www.pytorchlightning.ai/tutorials
         """
-        pass
+        t = torch.randint(0, self.n_steps, (len(batch_idx),))
+        batch_noise,noise = self.q_sample(batch[batch_idx],t)
+        e_theta = model(torch.cat(batch_noise,t))
+        loss = nn.MSELoss()
+        return loss(e_theta,noise)
+        
+        
 
     def sample(self, n_samples, progress=False, return_intermediate=False):
         """
@@ -105,7 +130,7 @@ class LitDiffusionModel(pl.LightningModule):
             i.e. a Tensor of size (n_samples, n_dim) and a list of `self.n_steps` Tensors of size (n_samples, n_dim) each.
             Return: (n_samples, n_dim)(final result), [(n_samples, n_dim)(intermediate) x n_steps]
         """
-        pass
+        
 
     def configure_optimizers(self):
         """
