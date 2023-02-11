@@ -19,8 +19,17 @@ class LitDiffusionModel(pl.LightningModule):
         If your `model` is different for different datasets, you can use a hyperparameter to switch between them.
         Make sure that your hyperparameter behaves as expecte and is being saved correctly in `hparams.yaml`.
         """
-        self.time_embed = None
-        self.model = None
+        t = torch.zeros(200,4)
+        for i in range(200):
+            for j in range(2):
+                t[i][2*j]= torch.sin(i/(torch.pow(10000,torch.tensor(2*j/4))))
+                t[i][2*j+1]= torch.cos(i/(torch.pow(10000,torch.tensor(2*j/4))))
+        self.time_embed = t
+        self.model = torch.nn.Sequential(
+          nn.Linear(3,10),
+          nn.ReLU(),
+          nn.Linear(10,3)
+        )
 
         """
         Be sure to save at least these 2 parameters in the model instance.
