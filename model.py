@@ -130,7 +130,22 @@ class LitDiffusionModel(pl.LightningModule):
             i.e. a Tensor of size (n_samples, n_dim) and a list of `self.n_steps` Tensors of size (n_samples, n_dim) each.
             Return: (n_samples, n_dim)(final result), [(n_samples, n_dim)(intermediate) x n_steps]
         """
-        
+        points = []
+        if return_intermediate is False:
+            x = torch.randn((n_samples,self.n_dim))
+            for i in range(self.n_steps-1,-1,-1):
+                x_t = self.p_sample(x,i)
+                x=x_t
+            return x
+        else:
+            x = torch.randn((n_samples,self.n_dim))
+            points.append(x)
+            for i in range(self.n_steps-1,-1,-1):
+                x_t = self.p_sample(x,i)
+                x=x_t
+                points.append(x)
+            return torch.tensor(points).permute(1,2,0)
+            
 
     def configure_optimizers(self):
         """
@@ -139,4 +154,5 @@ class LitDiffusionModel(pl.LightningModule):
         You may choose to add certain hyperparameters of the optimizers to the `train.py` as well.
         In our experiments, we chose one good value of optimizer hyperparameters for all experiments.
         """
-        pass
+        optimizer = torch.optim.Adam(lr=0.0001)
+        return optimizer
