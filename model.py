@@ -26,9 +26,17 @@ class LitDiffusionModel(pl.LightningModule):
                 t[i][2*j+1]= torch.cos(i/(torch.pow(10000,torch.tensor(2*j/4))))
         self.time_embed = t
         self.model = torch.nn.Sequential(
-          torch.nn.Linear(7,10),
+          torch.nn.Linear(7,100),
           torch.nn.ReLU(),
-          torch.nn.Linear(10,3)
+          torch.nn.Linear(100,100),
+          torch.nn.ReLU(),
+          torch.nn.Linear(100,100),
+          torch.nn.ReLU(),
+          torch.nn.Linear(100,100),
+          torch.nn.ReLU(),
+          torch.nn.Linear(100,100),
+          torch.nn.ReLU(),
+          torch.nn.Linear(100,3),
         )
 
         """
@@ -97,7 +105,7 @@ class LitDiffusionModel(pl.LightningModule):
         t1 = t1.to("cuda")
         z = z.to("cuda")
         # print("index ",(self.index(self.alphas,t,x)).is_cuda)
-        s =  1/(self.index(self.alphas,t,x))*(x - (self.index(self.betas,t,x)/(torch.sqrt(1-self.index(self.alpha_bar,t,x))))*self.model(torch.cat((x,t1),axis=1).to("cuda")))
+        s =  (1/(torch.sqrt(self.index(self.alphas,t,x))))*(x - (self.index(self.betas,t,x)/(torch.sqrt(1-self.index(self.alpha_bar,t,x))))*self.model(torch.cat((x,t1),axis=1).to("cuda")))
         s += self.index(self.sigma,t,x)*z
         
         return s
@@ -163,7 +171,7 @@ class LitDiffusionModel(pl.LightningModule):
                 x=x_t
                 points.append(x.detach().cpu().numpy())
             # print(torch.tensor(points).shape)
-            point = torch.tensor(points).permute(1,2,0)
+            point = torch.tensor(points)
             return x.detach().cpu(),point
             
 
