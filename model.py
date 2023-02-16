@@ -1,8 +1,10 @@
 import torch
 import pytorch_lightning as pl
+import numpy as np
+import math
 
 class LitDiffusionModel(pl.LightningModule):
-    def __init__(self, n_dim=3, n_steps=200, lbeta=1e-5, ubeta=1e-2):
+    def __init__(self, n_dim=3, n_steps=200, lbeta=1e-5, ubeta=1e-2,embeddim=4,lr=0.0001,cos='lin'):
         super().__init__()
         """
         If you include more hyperparams (e.g. `n_layers`), be sure to add that to `argparse` from `train.py`.
@@ -19,14 +21,14 @@ class LitDiffusionModel(pl.LightningModule):
         If your `model` is different for different datasets, you can use a hyperparameter to switch between them.
         Make sure that your hyperparameter behaves as expecte and is being saved correctly in `hparams.yaml`.
         """
-        t = torch.zeros(200,4,dtype=torch.float)
-        for i in range(200):
-            for j in range(2):
-                t[i][2*j]= torch.sin(i/(torch.pow(10000,torch.tensor(2*j/4))))
-                t[i][2*j+1]= torch.cos(i/(torch.pow(10000,torch.tensor(2*j/4))))
+        t = torch.zeros(n_steps,embeddim,dtype=torch.float)
+        for i in range(n_steps):
+            for j in range(embeddim//2):
+                t[i][2*j]= torch.sin(i/(torch.pow(10000,torch.tensor(2*j/embeddim))))
+                t[i][2*j+1]= torch.cos(i/(torch.pow(10000,torch.tensor(2*j/embeddim))))
         self.time_embed = t
         self.model = torch.nn.Sequential(
-          torch.nn.Linear(7,100),
+          torch.nn.Linear(3+embeddim,100),
           torch.nn.ReLU(),
           torch.nn.Linear(100,100),
           torch.nn.ReLU(),
@@ -44,9 +46,10 @@ class LitDiffusionModel(pl.LightningModule):
         """
         self.n_steps = n_steps
         self.n_dim = n_dim
-
+        self.lr = lr
+        self.cos = cos
         """
-        Sets up variables for noise schedule
+        Sets up variables for noise schedule as given in the paper
         """
         self.betas = self.init_alpha_beta_schedule(lbeta, ubeta)
         self.alphas = 1 - self.betas
@@ -64,7 +67,7 @@ class LitDiffusionModel(pl.LightningModule):
         """
         if not isinstance(t, torch.Tensor):
             t = torch.LongTensor([t]).expand(x.size(0))
-        t_embed = self.time_embed(t)
+        t_embed = self.time_embed[t.cpu()].to('cuda')
         return self.model(torch.cat((x, t_embed), dim=1).float())
 
     def init_alpha_beta_schedule(self, lbeta, ubeta):
@@ -73,13 +76,38 @@ class LitDiffusionModel(pl.LightningModule):
         switch between various schedules for answering q4 in depth. Make sure that this hyperparameter 
         is included correctly while saving and loading your checkpoints.
         """
-        return torch.linspace(lbeta,ubeta,self.n_steps)
+        s = 0.008 # paramter value set inside the paper improved denoising diffusion model
+        if self.cos=='cos':
+            t =(((torch.linspace(lbeta,ubeta,self.n_steps)/self.n_steps)+s)/(1+s))*(math.pi/2)
+            t = torch.cos(t)
+            t = t**2/(torch.cos(torch.tensor(((1+s)/s)*(math.pi/2))))**2
+            t1 = torch.cat((torch.tensor([1]),t[:-1]),axis=0)
+            t_embed = torch.clamp(1-(t/t1),max=0.999)
+        elif self.cos=='sqrt':
+            t= 1 - torch.sqrt(s+(torch.linspace(lbeta,ubeta,self.n_steps)/self.n_steps))
+            t1 = torch.cat((torch.tensor([1]),t[:-1]),axis=0)
+            t_embed = torch.clamp(1-(t/t1),max=0.999)
+        elif self.cos=='quad':
+            t_embed= torch.linspace(lbeta**0.5,ubeta**0.5,self.n_steps)**2
+        elif self.cos=='cubic':
+            t_embed = torch.linspace(lbeta**0.33,ubeta**0.33,self.n_steps)**3
+        elif self.cos=='reci':
+            t_embed = 1/(torch.linspace(self.n_steps,2,self.n_steps))
+        elif self.cos=='const':
+            t_embed = ubeta * torch.ones(self.n_steps)
+        else:
+            t_embed=torch.linspace(lbeta,ubeta,self.n_steps)
+        
+        return t_embed
+       
+        
+        
+        # return torch.linspace(lbeta,ubeta,self.n_steps)
     def index(self,t,i,x): # helper function to get the tensors corresponding to given dimension
-        # t1= t.reshape(-1,1)
-        # print("t ",t.shape," i ",i.shape)
-        # x1 = torch.gather(t.cpu(),0,i.cpu()).to('cuda')
-        x1   = t.gather(-1,i.cpu()).to('cuda')
-        return x1.reshape([x.shape[0]]+[1]*(len(x.shape)-1))
+        y = torch.tensor(np.take_along_axis(t.detach().numpy(),i.detach().cpu().numpy(),axis=0)).to('cuda')
+        for i in range(len(x.shape)-1):
+            y = y.unsqueeze(-1)
+        return y
 
     def q_sample(self, x, t):
         """
@@ -131,9 +159,9 @@ class LitDiffusionModel(pl.LightningModule):
         # print(batch.shape)
         t = torch.randint(0, self.n_steps, (batch.shape[0],),device='cuda')
         batch_noise,noise = self.q_sample(batch,t)
-        t1=self.time_embed[t.cpu()].to('cuda')
+        # t1=self.time_embed[t.cpu()].to('cuda')
         # print(t1.shape)
-        e_theta = self.model(torch.cat((batch_noise,t1),axis=1).type(torch.float).to('cuda'))
+        e_theta = self.forward(batch_noise,t)
         loss = torch.nn.MSELoss()
         return loss(e_theta,noise)
         
@@ -182,5 +210,5 @@ class LitDiffusionModel(pl.LightningModule):
         You may choose to add certain hyperparameters of the optimizers to the `train.py` as well.
         In our experiments, we chose one good value of optimizer hyperparameters for all experiments.
         """
-        optimizer = torch.optim.Adam(self.model.parameters(),lr=0.0001)
+        optimizer = torch.optim.Adam(self.model.parameters(),lr=self.lr)
         return optimizer

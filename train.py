@@ -11,6 +11,9 @@ model_args.add_argument('--n_dim', type=int, default=3, help='Number of dimensio
 model_args.add_argument('--n_steps', type=int, default=50, help='Number of diffusion steps')
 model_args.add_argument('--lbeta', type=float, default=1e-5, help='Lower bound of beta')
 model_args.add_argument('--ubeta', type=float, default=1.28e-2, help='Upper bound of beta')
+model_args.add_argument('--embeddim',type=int,default=4, help='time embedding dimension')
+model_args.add_argument('--lr',type=float,default=1e-4,help='learning rate of the model')
+model_args.add_argument('--cos',type=str,default='lin',help='the noise schedule to use')
 
 training_args = parser.add_argument_group('training')
 training_args.add_argument('--seed', type=int, default=1618, help='Random seed for experiments')
@@ -25,6 +28,9 @@ n_dim = args.n_dim
 n_steps = args.n_steps
 lbeta = args.lbeta
 ubeta = args.ubeta
+embeddim = args.embeddim
+lr = args.lr
+cos = args.cos
 
 pl.seed_everything(args.seed)
 batch_size = args.batch_size
@@ -35,14 +41,18 @@ litmodel = LitDiffusionModel(
     n_dim=n_dim, 
     n_steps=n_steps, 
     lbeta=lbeta, 
-    ubeta=ubeta
+    ubeta=ubeta,
+    embeddim=embeddim,
+    lr=lr,
+    cos=cos
+    
 )
 
 train_dataset = ThreeDSinDataset(args.train_data_path)
 
 train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-run_name = f'n_dim={n_dim},n_steps={n_steps},lbeta={lbeta:.3e},ubeta={ubeta:.3e},batch_size={batch_size},n_epochs={n_epochs}'
+run_name = f'n_dim={n_dim},n_steps={n_steps},lbeta={lbeta:.3e},ubeta={ubeta:.3e},batch_size={batch_size},n_epochs={n_epochs},embeddim={embeddim},lr={lr},cos={cos}'
 
 trainer = pl.Trainer(
     deterministic=True,
