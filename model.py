@@ -2,9 +2,10 @@ import torch
 import pytorch_lightning as pl
 import numpy as np
 import math
+from collections import OrderedDict
 
 class LitDiffusionModel(pl.LightningModule):
-    def __init__(self, n_dim=3, n_steps=200, lbeta=1e-5, ubeta=1e-2,embeddim=4,lr=0.0001,cos='lin'):
+    def __init__(self, n_dim=3, n_steps=200, lbeta=1e-5, ubeta=1e-2,embeddim=4,lr=0.0001,cos='lin',n_layers=3):
         super().__init__()
         """
         If you include more hyperparams (e.g. `n_layers`), be sure to add that to `argparse` from `train.py`.
@@ -27,19 +28,32 @@ class LitDiffusionModel(pl.LightningModule):
                 t[i][2*j]= torch.sin(i/(torch.pow(10000,torch.tensor(2*j/embeddim))))
                 t[i][2*j+1]= torch.cos(i/(torch.pow(10000,torch.tensor(2*j/embeddim))))
         self.time_embed = t
-        self.model = torch.nn.Sequential(
-          torch.nn.Linear(3+embeddim,100),
-          torch.nn.ReLU(),
-          torch.nn.Linear(100,100),
-          torch.nn.ReLU(),
-          torch.nn.Linear(100,100),
-          torch.nn.ReLU(),
-          torch.nn.Linear(100,100),
-          torch.nn.ReLU(),
-          torch.nn.Linear(100,100),
-          torch.nn.ReLU(),
-          torch.nn.Linear(100,3),
-        )
+        self.n_layers=n_layers
+        # self.model = torch.nn.Sequential(
+        #   torch.nn.Linear(3+embeddim,100),
+        #   torch.nn.ReLU(),
+        #   torch.nn.Linear(100,100),
+        #   torch.nn.ReLU(),
+        #   torch.nn.Linear(100,100),
+        #   torch.nn.ReLU(),
+        #   torch.nn.Linear(100,100),
+        #   torch.nn.ReLU(),
+        #   torch.nn.Linear(100,100),
+        #   torch.nn.ReLU(),
+        #   torch.nn.Linear(100,3),
+        # )
+        layers = OrderedDict()
+        layers["0"]= torch.nn.Linear(n_dim+embeddim,100)
+        layers["1"]= torch.nn.ReLU()
+        for i in range(2,self.n_layers*2+2,2):
+            layers[str(i)] = torch.nn.Linear(100,100)
+            layers[str(i+1)] = torch.nn.ReLU()
+        layers[str(n_layers*2+2)]= torch.nn.Linear(100,n_dim)
+            
+        self.model = torch.nn.Sequential(layers)
+        # print(self)
+        
+        
 
         """
         Be sure to save at least these 2 parameters in the model instance.
